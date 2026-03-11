@@ -1,357 +1,608 @@
-# NSIGII Polygatic Video Codec
+# NSIGII ltcodec — Linkable Then Executable
 
-**Version**: 7.0.0  
-**Author**: OBINexus  
-**Date**: 17 February 2026  
-**Protocol**: Human Rights Verification System
+**Version**: 1.0.0
+**Author**: OBINexus
+**Date**: 11 March 2026
+**Format**: `.lt` (Stateless · Isomorphic · Trident-Verified)
 
 ## Overview
 
-The NSIGII codec implements a trident channel architecture for video encoding that provides mathematical verification of data integrity through discriminant-based flash sequences and bipolar enzyme operations. The system integrates ROPEN sparse duplex encoding with Red-Black AVL tree pruning to achieve compression ratios exceeding 90% while maintaining cryptographic verification at each processing stage.
+`ltcodec` is a **stateless, version-aware file archiving system** that encodes any file (or collection of files) into a single `.lt` container. The `.lt` format is a zip-based archive with built-in snapshot versioning, undo/redo capability, and cryptographic verification. Files remain integrable indefinitely—no expiry, no breaking changes.
+
+**Key Properties**:
+- **Linkable**: Reference any version at any time
+- **Executable**: [read, write, execute] permission model
+- **Stateless**: No versioning expiry, infinite reversibility
+- **Isomorphic**: Content structure preserved across encode/decode cycles
+- **Trident-Verified**: Cryptographic integrity at each state transition
+
+---
 
 ## Quick Start
-
-### Prerequisites
-
-- Go 1.21 or later
-- GCC (for optional C integration)
-- FFmpeg (for video conversion)
 
 ### Build
 
 ```bash
-cd nsigii_codec
-go build -o nsigii-codec main.go
+cd nsigii_ltcodec
+go build -o ltcodec ./cmd/ltcodec
 ```
 
-### Run
+### Basic Workflow: Encode → Save Version → Decode
 
 ```bash
-# Basic usage
-./nsigii-codec --input video.rgb24 --output encoded.nsigii
+# 1. Encode a file into .lt format
+./ltcodec coder -input myfile.txt -output myfile.lt
 
-# With custom dimensions
-./nsigii-codec \
-    --width 1920 \
-    --height 1080 \
-    --input video.rgb24 \
-    --output encoded.nsigii
+# 2. Save the current state (create a snapshot)
+./ltcodec flash save -target myfile.lt
 
-# From stdin
-cat video.rgb24 | ./nsigii-codec --input - --output encoded.nsigii
+# 3. Decode back to original format
+./ltcodec decoder -input myfile.lt -output myfile_restored.txt
 ```
 
-### Convert Existing Video
+---
+
+## Practical Example: Multi-Component Web Archive
+
+Build an interactive web component system with **versioned incremental changes**:
+
+### Scenario: Web UI with Progressive State Changes
+
+```
+Step 1: Create base index.html
+Step 2: Add form.html (first checkpoint)
+Step 3: Add accordion.html (second checkpoint)
+Each step creates an undoable snapshot
+```
+
+### File Preparation
+
+Create your components:
+
+**index.html**
+```html
+
+
+
+    Interactive UI
+    
+        body { font-family: sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+    
+
+
+    
+        Interactive UI System
+        Version 1.0 - Base state
+    
+
+
+```
+
+**form.html**
+```html
+
+    User Form
+    
+        Name: 
+        Email: 
+        Submit
+    
+
+```
+
+**accordion.html**
+```html
+
+    Accordion Widget
+    
+        Section 1
+        
+            Content for section 1
+        
+        Section 2
+        
+            Content for section 2
+        
+    
+    
+        // Simple accordion handler
+        document.querySelectorAll('.accordion-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.nextElementSibling.style.display =
+                    btn.nextElementSibling.style.display === 'block' ? 'none' : 'block';
+            });
+        });
+    
+
+```
+
+### Step-by-Step Workflow
+
+#### Step 1: Encode Base File
 
 ```bash
-# Convert MP4 to RGB24
-ffmpeg -i input.mp4 -f rawvideo -pix_fmt rgb24 output.rgb24
-
-# Encode with NSIGII
-./nsigii-codec --input output.rgb24 --output encoded.nsigii
+./ltcodec coder -input index.html -output ui-system.lt
 ```
 
-## Architecture
-
-### Trident Channel System
-
-The codec processes each frame through three sequential channels:
-
-**Channel 0 - Transmitter (127.0.0.1)**
-- Encodes raw RGB24 data using ROPEN 2→1 sparse duplex
-- Applies polarity A encoding with conjugate nibble operations
-- Inserts encoded bytes into Red-Black AVL tree with confidence scoring
-- Sets WRITE permission (RWX = 0x02)
-- Generates SHA-256 hash for payload verification
-
-**Channel 1 - Receiver (127.0.0.2)**
-- Decodes packet and verifies hash integrity
-- Performs bipartite order check (even/odd sequence token)
-- Toggles between ORDER and CHAOS states
-- Sets READ permission (RWX = 0x04)
-- Forwards to verifier with topology update
-
-**Channel 2 - Verifier (127.0.0.3)**
-- Computes discriminant: Δ = b² - 4ac
-- Applies flash verification based on discriminant state
-- Performs enzyme repair if chaos state detected
-- Grants EXECUTE permission on successful verification
-- Achieves full RWX = 0x07 at consensus
-
-### Discriminant Flash Verification
-
-The discriminant formula determines system state:
-
-- **Δ > 0**: ORDER state (two real roots, stable encoding)
-- **Δ = 0**: CONSENSUS state (flash point, verification achieved)
-- **Δ < 0**: CHAOS state (complex roots, requires repair)
-
-The quadratic roots encode bipolar operations:
+Output:
 ```
-x = (-b ± √Δ) / 2a
+✓ Encoded: index.html → ui-system.lt
+  Size: 542 bytes (original) → 287 bytes (.lt archive)
+  State: initialized
+  RWX: 0x07 (read/write/execute)
 ```
 
-Positive root (+) → BUILD/CREATE path  
-Negative root (−) → BREAK/DESTROY path
+#### Step 2: Add Form Component (First Checkpoint)
 
-### Flash Buffer Storage
-
-The flash buffer implements dimensional reduction through two operations:
-
-**Additive Flash**: 1/2 + 1/2 = 1
-Unites two half-buffers into complete frame
-
-**Multiplicative Flash**: 1/2 × 1/2 = 1/4
-Requires four quarter-flashes for unit reconstruction
-
-### Bipolar Enzyme Model
-
-The enzyme system executes six core operations:
-
-**Order Sequence**: CREATE → BUILD → RENEW → REPAIR  
-**Chaos Sequence**: DESTROY → BREAK → REPAIR
-
-These operations mirror biological enzyme behavior where read-write-execute cycles occur atomically without explicit state management.
-
-### ROPEN Sparse Duplex
-
-Two physical bytes map to one logical byte through conjugate operations:
-
-**Polarity A**: `logical = a ⊕ conjugate(b)`  
-**Polarity B**: `logical = conjugate(a) ⊕ b`
-
-Conjugate function: `conjugate(x) = 0xF ⊕ x`
-
-### Red-Black AVL Tree
-
-The RB-AVL tree provides O(½ log n) space complexity with the following properties:
-
-- Combined Red-Black coloring with AVL height balancing
-- Confidence-based pruning (threshold = 0.5)
-- Polarity-aware streak counting
-- NIL preservation (zero bytes never pruned)
-
-## File Format
-
-### NSIGII Container
-
-**Header (32 bytes)**:
-```
-Magic:        "NSIGII\0\0"     (8 bytes)
-Version:      "7.0.0\0\0\0"    (8 bytes)
-Width:        uint32           (4 bytes)
-Height:       uint32           (4 bytes)
-Frame Count:  uint32           (4 bytes)
-Reserved:     uint32           (4 bytes)
-```
-
-**Frame Structure**:
-```
-Frame Size:   uint32           (4 bytes)
-Frame Data:   []byte           (N bytes)
-```
-
-Each frame contains YUV420-encoded data compressed with DEFLATE after passing through all three trident channels.
-
-## Performance
-
-### Compression Ratios
-
-For standard 384×216 RGB24 video:
-
-- **Raw Frame**: 248,832 bytes
-- **YUV420**: 124,416 bytes (50% reduction)
-- **ROPEN Duplex**: 62,208 bytes (75% reduction)
-- **DEFLATE**: ~15,552 bytes (93.75% reduction)
-
-### Computational Complexity
-
-- **Space**: O(½ log n) for RB-AVL tree
-- **Time**: O(¼ log n) per byte for duplex encoding
-- **Auxiliary**: O(1) for fixed buffer sizes
-
-### Verification Overhead
-
-Trident channel processing adds approximately 5% overhead for RB-AVL operations and discriminant calculations compared to standard video codecs.
-
-## Integration
-
-### FFmpeg Pipeline
+Create a composite file combining index + form:
 
 ```bash
-# Encode
-ffmpeg -i input.mp4 -f rawvideo -pix_fmt rgb24 - | \
-    ./nsigii-codec --input - --output video.nsigii
+# Combine both files
+cat index.html form.html > ui-system-v1.html
 
-# Decode (requires decoder implementation)
-cat video.nsigii | ./nsigii-decoder | \
-    ffplay -f rawvideo -pix_fmt rgb24 -video_size 384x216 -
+# Encode the updated version
+./ltcodec coder -input ui-system-v1.html -output ui-system.lt
 ```
 
-### GStreamer Pipeline
+Now save this as a checkpoint:
 
 ```bash
-gstreamer-launch-1.0 \
-    videotestsrc ! \
-    videoconvert ! \
-    video/x-raw,format=RGB,width=384,height=216 ! \
-    fdsink | ./nsigii-codec --input -
+./ltcodec flash save -target ui-system.lt
 ```
 
-## Testing
+Output:
+```
+✓ Flash: Saved state #1
+  Target: ui-system.lt
+  Timestamp: 2026-03-11T14:32:45Z
+  Size: 412 bytes
+  Files: 1 (ui-system-v1.html)
+```
 
-### Unit Tests
+#### Step 3: Add Accordion Component (Second Checkpoint)
+
+Create the full composite:
 
 ```bash
-go test -v ./...
+cat index.html form.html accordion.html > ui-system-v2.html
+
+./ltcodec coder -input ui-system-v2.html -output ui-system.lt
+./ltcodec flash save -target ui-system.lt
 ```
 
-### Integration Test
+Output:
+```
+✓ Flash: Saved state #2
+  Target: ui-system.lt
+  Timestamp: 2026-03-11T14:33:12Z
+  Size: 789 bytes
+  Files: 1 (ui-system-v2.html)
+```
+
+#### Step 4: Check Version History
 
 ```bash
-# Generate test video
-ffmpeg -f lavfi -i testsrc=duration=10:size=384x216:rate=25 \
-    -f rawvideo -pix_fmt rgb24 test_video.rgb24
-
-# Encode
-./nsigii-codec --input test_video.rgb24 --output test_encoded.nsigii
-
-# Verify output
-ls -lh test_encoded.nsigii
+./ltcodec flash status
 ```
 
-### Benchmark
+Output:
+```
+Current state: #2 (2026-03-11T14:33:12Z)
+History:
+  [1] 2026-03-11T14:32:45Z - ui-system-v1.html
+  [2] 2026-03-11T14:33:12Z - ui-system-v2.html (current)
+
+Undo available: 1 step
+Redo available: none
+```
+
+#### Step 5: Undo to Previous Version
+
+Go back to form-only (state #1):
 
 ```bash
-go test -bench=. -benchmem
+./ltcodec flash undo
 ```
 
-## Human Rights Protocol
-
-The NSIGII codec enforces the following verification guarantees:
-
-1. **Hash Integrity**: SHA-256 verification at receiver
-2. **RWX Permission Chain**: WRITE → READ → EXECUTE
-3. **Discriminant Consensus**: Flash point confirmation
-4. **Wheel Continuity**: 0° → 120° → 240° → 360° progression
-5. **Human Rights Tag**: "NSIGII_HR_TRANSMIT" preservation
-
-These properties ensure that encoded content maintains cryptographic integrity and access control throughout the processing pipeline.
-
-## Advanced Usage
-
-### Custom Flash Verification
-
-Modify discriminant parameters for different verification thresholds:
-
-```go
-codec.Channels[CHANNEL_VERIFIER].FlashVerifier.A = 2.0
-codec.Channels[CHANNEL_VERIFIER].FlashVerifier.B = 4.0
-codec.Channels[CHANNEL_VERIFIER].FlashVerifier.C = 1.0
+Output:
+```
+✓ Rolled back to state #1
+  Timestamp: 2026-03-11T14:32:45Z
+  Content: ui-system-v1.html
 ```
 
-### Enzyme Operation Override
+Decode to verify:
 
-Apply specific enzyme operations to frames:
-
-```go
-repaired := codec.Channels[CHANNEL_VERIFIER].Enzyme.Execute(
-    ENZYME_REPAIR,
-    frameData,
-)
-```
-
-### RB-AVL Tree Inspection
-
-Query tree state and confidence scores:
-
-```go
-node := codec.RBTree.Find(key)
-if node != nil {
-    log.Printf("Confidence: %.2f, Polarity: %c", 
-        node.Confidence, node.Polarity)
-}
-```
-
-## Troubleshooting
-
-### Frame Size Mismatch
-
-Ensure input video matches specified dimensions:
 ```bash
-ffprobe -v error -select_streams v:0 \
-    -show_entries stream=width,height \
-    -of csv=p=0 input.mp4
+./ltcodec decoder -input ui-system.lt -output ui-system-restored.html
 ```
 
-### Verification Failures
+#### Step 6: Redo to Full Version
 
-Check discriminant state in logs:
-```
-Frame verification failed, applying repair
-```
+Move forward again:
 
-This indicates chaos state (Δ < 0) requiring enzyme repair. Increase quality settings or adjust flash verification parameters.
-
-### Memory Usage
-
-For large videos, consider processing in chunks:
 ```bash
-split -b 100M video.rgb24 chunk_
-for chunk in chunk_*; do
-    ./nsigii-codec --input $chunk --output ${chunk}.nsigii
-done
+./ltcodec flash redo
 ```
 
-## Development
-
-### Project Structure
-
+Output:
 ```
-nsigii_codec/
-├── main.go                 # Main codec implementation
-├── DOCUMENTATION.md        # Technical documentation
-├── README.md              # This file
-└── test/
-    ├── test_video.rgb24   # Test input
-    └── expected_output/   # Expected results
+✓ Advanced to state #2
+  Timestamp: 2026-03-11T14:33:12Z
+  Content: ui-system-v2.html (index.html + form.html + accordion.html)
 ```
 
-### Contributing
+---
 
-This codec implements the NSIGII human rights verification protocol. Contributions should maintain the following principles:
+## Command Reference
 
-1. **Observation > Mutation**: Data integrity preserved during encoding
-2. **Conjugate Pairs**: A ↔ B polarity without preference
-3. **NIL Preservation**: Zero bytes maintained for epsilon-state continuity
-4. **Flash Consensus**: Discriminant verification at each stage
+### `coder` — Encode File → .lt Archive
 
-### References
+Converts any file (or combined files) into a `.lt` container.
 
-- [ROPEN Specification](https://github.com/obinexus/ropen)
-- NSIGII BiPolar Sequence (30 Jan 2026)
-- Filter and Flash Interdependence
-- Rectorial Reasoning Rational Wheel (11 Feb 2026)
-- Trident Command & Control Architecture
+```bash
+./ltcodec coder -input  [-output ] [-v]
+```
 
-## License
+**Options**:
+- `-input <file>` — File to encode (required)
+- `-output <file.lt>` — Output .lt archive (default: `<input>.lt`)
+- `-v` — Verbose output
 
-MIT License - See LICENSE file for details
+**Example**:
+```bash
+./ltcodec coder -input app.js -output app.lt
+./ltcodec coder -input combined.html -output app.lt -v
+```
 
-## Citation
+---
 
-If you use this codec in research or production, please cite:
+### `decoder` — Decode .lt Archive → Original File
+
+Extracts content from a `.lt` archive back to original format.
+
+```bash
+./ltcodec decoder -input  [-output ] [-v]
+```
+
+**Options**:
+- `-input <file.lt>` — .lt archive to decode (required)
+- `-output <file>` — Output file (default: `decoded_<original_name>`)
+- `-v` — Verbose output
+
+**Example**:
+```bash
+./ltcodec decoder -input app.lt
+./ltcodec decoder -input app.lt -output restored_app.js -v
+```
+
+---
+
+### `flash` — Snapshot Versioning
+
+Create, manage, and navigate version snapshots.
+
+```bash
+./ltcodec flash [save|undo|redo|status] [-target ] [-flash-root ] [-v]
+```
+
+**Subcommands**:
+- `save` — Create a new snapshot checkpoint
+- `undo` — Revert to previous snapshot
+- `redo` — Advance to next snapshot
+- `status` — Show version history and current state
+
+**Options**:
+- `-target <file.lt>` — .lt file to snapshot (required for save)
+- `-flash-root <dir>` — Override snapshot storage directory
+- `-v` — Verbose output
+
+**Example**:
+```bash
+./ltcodec flash save -target app.lt
+./ltcodec flash status
+./ltcodec flash undo
+./ltcodec flash redo -v
+```
+
+---
+
+### `filter` — Inspect & Sort Archive Contents
+
+Query the contents of a `.lt` archive.
+
+```bash
+./ltcodec filter -input  [-sort name|size|type] [-query ] [-v]
+```
+
+**Options**:
+- `-input <file.lt>` — Archive to inspect (required)
+- `-sort name|size|type` — Sort results (default: name)
+- `-query <pattern>` — Filter by pattern (regex)
+- `-v` — Verbose output
+
+**Example**:
+```bash
+./ltcodec filter -input app.lt
+./ltcodec filter -input app.lt -sort size
+./ltcodec filter -input app.lt -query "\.html$" -v
+```
+
+---
+
+### `rollback` — Downgrade to Prior State
+
+Roll back the entire system to a previous version.
+
+```bash
+./ltcodec rollback --downgrade [-target ] [-flash-root ] [-v]
+```
+
+**Options**:
+- `--downgrade` — Activate rollback mode (required)
+- `-target <file.lt>` — Archive to restore
+- `-flash-root <dir>` — Override snapshot directory
+- `-v` — Verbose output
+
+**Example**:
+```bash
+./ltcodec rollback --downgrade -target app.lt
+```
+
+---
+
+### `wheel` — State Progression
+
+Advance snapshots or epoch-bump the version state.
+
+```bash
+./ltcodec wheel [--update|--upgrade] [-target ] [-flash-root ] [-v]
+```
+
+**Options**:
+- `--update` — Advance to latest snapshot
+- `--upgrade` — Archive current state, start new epoch
+- `-target <file.lt>` — Source for upgrade
+- `-flash-root <dir>` — Override directory
+- `-v` — Verbose output
+
+**Example**:
+```bash
+./ltcodec wheel --update -target app.lt
+./ltcodec wheel --upgrade -target app.lt -v
+```
+
+---
+
+## The `.lt` File Format
+
+### Structure
+
+The `.lt` format is a **zip-based container** with metadata:
 
 ```
-@software{nsigii_codec_2026,
-  author = {OBINexus},
-  title = {NSIGII Polygatic Video Codec},
-  version = {7.0.0},
-  year = {2026},
-  url = {https://github.com/obinexus/nsigii-codec}
+ui-system.lt
+├── .ltmeta           (metadata, timestamps, version info)
+├── .ltflash/         (snapshot directory)
+│   ├── state_0001/   (snapshot 1 checkpoint)
+│   ├── state_0002/   (snapshot 2 checkpoint)
+│   └── manifest.json (version history)
+└── payload.bin       (current encoded content)
+```
+
+### Permissions Model: [Read, Write, Execute]
+
+Each `.lt` archive has three permission bits:
+
+- **R (Read)**: Can decode/extract content
+- **W (Write)**: Can encode new versions
+- **X (Execute)**: Can apply transformations (flash, filter, wheel)
+
+All three are enabled by default: `RWX = 0x07`
+
+### Metadata
+
+Every `.lt` archive contains:
+
+```json
+{
+  "format": "Linkable Then Executable",
+  "version": "1.0.0",
+  "created": "2026-03-11T14:30:00Z",
+  "modified": "2026-03-11T14:33:12Z",
+  "encoding": "isomorphic",
+  "verification": "trident-verified",
+  "snapshots": 2,
+  "rwx": "0x07"
 }
 ```
 
 ---
 
-*"Structure is a signal. Polarity is a strategy. NSIGII is the experiment."*
+## Lua FFI Integration
+
+Use ltcodec from Lua via FFI:
+
+```lua
+local ffi = require("ffi")
+local ltcodec = ffi.load("./ltcodec")
+
+ffi.cdef[[
+    int encode(const char *input_path, const char *output_path);
+    int decode(const char *input_path, const char *output_path);
+    int flash_save(const char *target_path);
+    int flash_undo(const char *target_path);
+    int flash_status(const char *target_path);
+]]
+
+-- Encode a file
+ltcodec.encode("myfile.txt", "myfile.lt")
+
+-- Save a snapshot
+ltcodec.flash_save("myfile.lt")
+
+-- Undo to previous version
+ltcodec.flash_undo("myfile.lt")
+
+-- Check status
+ltcodec.flash_status("myfile.lt")
+```
+
+Compile with:
+```bash
+go build -o ltcodec.so -buildmode=c-shared ./cmd/ltcodec
+```
+
+---
+
+## Advanced: Creating Incremental State System
+
+For OBINexus compliance, create a **stateless, undoable incremental system**:
+
+### Workflow Pattern
+
+```lua
+-- Initialize state
+local state = ltcodec:new()
+
+-- Stage 1: Create base
+state:encode("index.html", "app.lt")
+state:flash_save("Stage 1: Base UI")
+
+-- Stage 2: Add form component
+state:append("form.html")
+state:encode("combined.html", "app.lt")
+state:flash_save("Stage 2: Add Form")
+
+-- Stage 3: Add accordion
+state:append("accordion.html")
+state:encode("combined.html", "app.lt")
+state:flash_save("Stage 3: Add Accordion")
+
+-- Inspect history
+state:flash_status()
+
+-- Navigate: undo → redo → upgrade
+state:flash_undo()      -- Back to Stage 2
+state:flash_redo()      -- Forward to Stage 3
+state:wheel_upgrade()   -- Archive and start new epoch
+```
+
+---
+
+## Properties
+
+### Stateless Encoding
+
+Content never expires or becomes incompatible. Any snapshot from any epoch can be:
+- Decoded and used immediately
+- Modified and re-encoded
+- Merged with other archives
+- Verified against original
+
+### Isomorphic Transform
+
+Encode → Decode guarantees **perfect reconstruction**:
+
+```
+Input: myfile.txt (500 bytes)
+  ↓ encode
+Output: myfile.lt (287 bytes)
+  ↓ decode
+Result: myfile.txt (500 bytes) ✓ Byte-for-byte identical
+```
+
+### Trident Verification
+
+Three-channel cryptographic verification ensures data integrity:
+1. **Transmitter**: Encodes with polarity
+2. **Receiver**: Verifies hash, checks sequence
+3. **Verifier**: Computes discriminant, grants RWX permissions
+
+Success: all three channels converge → RWX = 0x07 ✓
+
+---
+
+## Building & Testing
+
+### Build
+
+```bash
+go build -o ltcodec ./cmd/ltcodec
+```
+
+### Run Tests
+
+```bash
+go test -v ./...
+```
+
+### Create .so Library (for Lua/FFI)
+
+```bash
+go build -o ltcodec.so -buildmode=c-shared ./cmd/ltcodec
+```
+
+---
+
+## Directory Structure
+
+```
+nsigii_ltcodec/
+├── main.go              # CLI entry point
+├── README.md            # This file
+├── cmd/
+│   └── ltcodec/         # Command implementations
+├── pkg/
+│   ├── codec/           # Encoder/Decoder
+│   ├── state/           # Flash, rollback, wheel
+│   └── transform/       # Trident verification
+└── test/
+    ├── index.html       # Example component 1
+    ├── form.html        # Example component 2
+    └── accordion.html    # Example component 3
+```
+
+---
+
+## Key Concepts
+
+### Linkable
+- Reference any snapshot by timestamp
+- Chain versions linearly: State 0 → 1 → 2 → 3
+- Create branches via `wheel --upgrade`
+
+### Executable
+- `coder` encodes files into .lt
+- `decoder` extracts originals
+- `flash`/`rollback`/`wheel` manipulate state
+- All operations preserve RWX permissions
+
+### Stateless
+- No expiry dates on snapshots
+- No breaking version changes
+- Infinite reversibility (undo/redo)
+- Integration never fails due to age
+
+---
+
+## Use Cases
+
+1. **Web Component Versioning**: Track UI component iterations with snapshots
+2. **Configuration Management**: Encode configs, snapshot before changes, rollback if needed
+3. **Document Archive**: Store documents with full version history, no expiry
+4. **Stateless Deployment**: Deploy archived states without dependency chains
+5. **Artifact Management**: Package build artifacts as `.lt` archives with verification
+
+---
+
+## License
+
+MIT License — See LICENSE file for details
+
+---
+
+**"Linkable Then Executable — Stateless Forever"**
+
+*NSIGII ltcodec | OBINexus | 2026*

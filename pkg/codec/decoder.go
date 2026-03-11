@@ -1,10 +1,10 @@
+// pkg/codec/decoder.go
 package codec
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/obinexusmk2/ltcodec/pkg/format"
 	"github.com/obinexusmk2/ltcodec/pkg/transform"
@@ -12,82 +12,86 @@ import (
 
 // DecoderConfig holds options for the decoder subcommand.
 type DecoderConfig struct {
-	InputPath  string // .lt archive
-	OutputPath string // recovered file (default: <original_name>)
+	InputPath  string // .lt archive to decode
+	OutputPath string // destination file (default: <original_name>)
 	Verbose    bool
 }
 
-// Decode reads a .lt archive, reverses the isomorphic XOR transform,
-// verifies trident integrity, and writes the original payload to disk.
-//
-// CLI: ltcodec decoder -input <file.lt> [-output <file>]
+// Decode extracts a .lt archive, verifies integrity, and restores the original file.
+// This reverses Encode: XOR is self-inverting, so same key + same operation = original.
 func Decode(cfg DecoderConfig) error {
-	// ── Read .lt archive ──────────────────────────────────────────────────
-	ltBytes, err := os.ReadFile(cfg.InputPath)
+	// ── Read .lt archive ────────────────────────────────────────────────
+	ltData, err := os.ReadFile(cfg.InputPath)
 	if err != nil {
-		return fmt.Errorf("decoder: read %q: %w", cfg.InputPath, err)
-	}
-
-	// ── Open and verify archive ───────────────────────────────────────────
-	meta, payload, idx, err := format.Open(ltBytes)
-	if err != nil {
-		return fmt.Errorf("decoder: open archive: %w", err)
+		return fmt.Errorf("decoder: read archive %q: %w", cfg.InputPath, err)
 	}
 
 	if cfg.Verbose {
-		fmt.Printf("[DECODER] input:      %s (%d bytes)\n", cfg.InputPath, len(ltBytes))
-		fmt.Printf("[DECODER] uuid:       %s\n", meta.UUID)
-		fmt.Printf("[DECODER] original:   %s (%s)\n", meta.OriginalName, meta.ContentType)
-		fmt.Printf("[DECODER] stateless:  %v\n", meta.Stateless)
-		fmt.Printf("[DECODER] sections:   %d\n", len(idx))
+		fmt.Printf("[DECODER] archive: %s (%d bytes)\n", cfg.InputPath, len(ltData))
 	}
 
-	// ── Trident verification (read-only integrity check) ─────────────────
-	result := transform.RunTrident(payload)
+	// ── Parse zip structure ─────────────────────────────────────────────
+	meta, payload, idx, err := format.Open(ltData)
+	if err != nil {
+		return fmt.Errorf("decoder: parse archive: %w", err)
+	}
 
 	if cfg.Verbose {
-		fmt.Printf("[DECODER] trident:    state=%s Δ=%.4f verified=%v\n",
-			result.State, result.Discriminant, result.Verified)
+		fmt.Printf("[DECODER] sections: %d\n", len(idx))
+		for _, entry := range idx {
+			fmt.Printf("  - %s: %s (%d bytes)\n", entry.Type, entry.Name, entry.Size)
+		}
+		fmt.Printf("[DECODER] uuid:     %s\n", meta.UUID)
+		fmt.Printf("[DECODER] type:     %s\n", meta.ContentType)
+		fmt.Printf("[DECODER] original: %s\n", meta.OriginalName)
+		fmt.Printf("[DECODER] stateless: %v\n", meta.Stateless)
 	}
 
-	// ── Reverse isomorphic XOR transform (self-inverse) ───────────────────
+	// ── Derive same key used for encoding ──────────────────────────────
+	// The UUID in metadata ensures we get the identical key sequence
 	key := transform.DeriveKey(meta.UUID)
-	// The stored payload is the pure XOR-encoded data (no receive flip).
-	// XOR is its own inverse, so Decode(Encode(raw, key), key) == raw.
-	recovered := transform.Decode(payload, key)
 
-	// ── Resolve output path ───────────────────────────────────────────────
-	if cfg.OutputPath == "" {
-		cfg.OutputPath = resolveOutputPath(cfg.InputPath, meta.OriginalName)
+	// ── XOR decode (self-inverting: same operation as encode) ───────────
+	// Encode(Encode(data, key), key) == data because (x ^ k) ^ k == x
+	decoded := transform.Decode(payload, key)
+
+	// ── Trident verification (read-only diagnostic) ────────────────────
+	// Run on decoded data to verify integrity
+	result := transform.RunTrident(decoded)
+	
+	if cfg.Verbose {
+		fmt.Printf("[DECODER] trident:  state=%s Δ=%.4f wheel=%d° RWX=0x%02X\n",
+			result.State, result.Discriminant, result.WheelDeg, result.RWXFlags)
+		fmt.Printf("[DECODER] polarity: %c | verified: %v\n", result.Polarity, result.Verified)
 	}
 
-	// ── Write recovered file ──────────────────────────────────────────────
-	if err := os.WriteFile(cfg.OutputPath, recovered, 0644); err != nil {
-		return fmt.Errorf("decoder: write %q: %w", cfg.OutputPath, err)
+	// CHAOS state warning — data may be corrupted but we still output it
+	if result.State == transform.StateChaos {
+		fmt.Fprintf(os.Stderr, "[DECODER] WARNING: CHAOS state detected — payload may need repair\n")
 	}
 
-	fmt.Printf("[DECODER] output:     %s (%d bytes)\n", cfg.OutputPath, len(recovered))
-	fmt.Printf("[DECODER] state:      %s | polarity: %c\n",
-		result.State, result.Polarity)
+	// ── Resolve output path ────────────────────────────────────────────
+	outputPath := cfg.OutputPath
+	if outputPath == "" {
+		// Use original name from metadata, prefixed to avoid overwrite
+		if meta.OriginalName != "" && meta.OriginalName != "-" {
+			outputPath = meta.OriginalName
+		} else {
+			// Derive from input filename
+			base := filepath.Base(cfg.InputPath)
+			ext := filepath.Ext(base)
+			name := base[:len(base)-len(ext)]
+			outputPath = name + "_decoded"
+		}
+	}
+
+	// ── Write decoded file ─────────────────────────────────────────────
+	if err := os.WriteFile(outputPath, decoded, 0644); err != nil {
+		return fmt.Errorf("decoder: write output %q: %w", outputPath, err)
+	}
+
+	fmt.Printf("[DECODER] output:   %s (%d bytes)\n", outputPath, len(decoded))
+	fmt.Printf("[DECODER] status:   %s | isomorphic: OK\n", result.State)
 
 	return nil
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-// resolveOutputPath builds a sensible output path for the decoded file.
-func resolveOutputPath(ltPath, originalName string) string {
-	dir := filepath.Dir(ltPath)
-
-	if originalName != "" && originalName != "." {
-		return filepath.Join(dir, "decoded_"+originalName)
-	}
-
-	// Fallback: strip .lt extension
-	base := filepath.Base(ltPath)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	return filepath.Join(dir, name+"_decoded")
 }

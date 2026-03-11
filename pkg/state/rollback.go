@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"nsigii_ltcodec/pkg/codec"
+	"github.com/obinexusmk2/ltcodec/pkg/codec"
 )
 
 // RollbackConfig holds options for the rollback subcommand.

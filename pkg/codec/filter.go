@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"nsigii_ltcodec/pkg/format"
-	"nsigii_ltcodec/pkg/transform"
+	"github.com/obinexusmk2/ltcodec/pkg/format"
+	"github.com/obinexusmk2/ltcodec/pkg/transform"
 )
 
 // FilterConfig holds options for the filter subcommand.

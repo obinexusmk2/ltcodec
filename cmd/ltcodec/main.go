@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"os"
 
-	"nsigii_ltcodec/pkg/codec"
-	"nsigii_ltcodec/pkg/state"
-	"nsigii_ltcodec/pkg/transform"
+	"github.com/obinexusmk2/ltcodec/pkg/codec"
+	"github.com/obinexusmk2/ltcodec/pkg/state"
+	"github.com/obinexusmk2/ltcodec/pkg/transform"
 )
 
 const banner = `

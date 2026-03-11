@@ -67,7 +67,7 @@ func Encode(cfg CoderConfig) error {
 		fmt.Printf("[CODER] parity:  axis=0x%02X polarity=%c\n", parityByte, polarity)
 	}
 
-	// ── Trident 3-channel verification ────────────────────────────────────
+	// ── Trident 3-channel verification (read-only — does NOT mutate payload) ─
 	result := transform.RunTrident(encoded)
 
 	if cfg.Verbose {
@@ -75,8 +75,10 @@ func Encode(cfg CoderConfig) error {
 			result.State, result.Discriminant, result.WheelDeg, result.RWXFlags)
 	}
 
-	// Use the trident-processed payload (may be enzyme-repaired on CHAOS)
-	payload := result.Data
+	// Store the pure XOR-encoded payload.  Trident is verification only;
+	// its receive-channel flip and enzyme repair must NOT be baked into
+	// the stored data, otherwise the decoder cannot invert the transform.
+	payload := encoded
 
 	// ── Build .lt archive ─────────────────────────────────────────────────
 	ltBytes, err := format.Build(meta, payload)

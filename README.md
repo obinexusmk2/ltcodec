@@ -18,6 +18,104 @@
 
 ---
 
+## Bipolar Enzyme Model
+
+The codec is governed by the **Bipolar Enzyme Model** — derived from the Mime Theory (OBINexus, 2026). Each operation is gated: you cannot proceed to the next state without resolving the current one. This is what makes the format version-agnostic and infinitely reversible.
+
+See [`The Enzyme Model.md`](./The%20Enzyme%20Model.md) for the full specification.
+
+**The three bipolar pairs:**
+
+| Pair | Forward | Interlayer | Reverse |
+|------|---------|------------|---------|
+| Existence | `create` | *(dimensional opposition)* | `destroy` |
+| Construction | `build` | **`bind`** | `break` |
+| Recovery | `repair` | *(mechanical process)* | `renew` |
+
+**The core axiom:** If you can build it, you can break it. If you can break it, you can bind it. If you can bind it, you can build it again.
+
+```plantuml
+@startuml NSIGII_Enzyme_Model_Overview
+
+title NSIGII Bipolar Enzyme Model — State Flow Overview\n<size:11>ltcodec · OBINexus 2026</size>
+
+skinparam backgroundColor #0D0D1A
+skinparam defaultFontName  "Courier New"
+skinparam defaultFontSize  12
+skinparam ArrowColor       #7777BB
+skinparam ArrowFontColor   #AAAADD
+skinparam ArrowFontSize    11
+skinparam ArrowThickness   1.6
+
+skinparam state {
+    BackgroundColor #1A1A2E
+    BorderColor     #5555AA
+    FontColor       #CCCCFF
+    StartColor      #00AAFF
+    EndColor        #FF4444
+}
+
+[*] -[#00AAFF]-> CREATE
+
+state "⬜ WHITE ROOM" as WR #1C2E44 {
+    state "CREATE"  as CREATE #1A3A5A : existence · forward
+    state "BUILD"   as BUILD  #1A3A5A : construction · forward\nDeriveKey(UUID) active
+    CREATE -[#00CCFF]-> BUILD : build gate
+}
+
+state "▩ GRAY ROOM" as GR #252530 {
+    state "BIND"    as BIND   #333344 : break interlayer
+    state "REPAIR"  as REPAIR #333344 : recovery · forward
+    BIND -[#9999AA]-> REPAIR
+}
+
+state "🟩 GREEN ROOM" as GreenR #0D1A0D {
+    state "BREAK"   as BREAK   #162A16 : construction · reverse\nΔ < 0 · CHAOS · polarity(−)
+    state "DESTROY" as DESTROY #162A16 : existence · reverse
+}
+
+state "RENEW\nstateless re-issue"          as RENEW   #0A1A2A
+state "BREAK ELIMINATED\nrebuild or renew" as BELIM   #1E0A3A
+state "REPAIR ELIMINATED\ncycle closes"    as RELIM   #1E0A3A
+
+' Primary cycle
+BUILD   -[#FF4444]--> BREAK   : ORDER Δ>0\nbuild gates break
+BREAK   -[#FFAA00]--> BIND    : bind interlayer\nGreen ↦ Gray
+BIND    -[#00FF88]--> BUILD   : Gray ↦ White\nrebuild
+REPAIR  -[#00FFCC]--> RENEW   : mechanical\ninterlayer
+RENEW   -[#00AAFF]--> RELIM
+RELIM   -[#00AAFF]--> CREATE  : cycle closes
+
+' Break elimination
+BUILD   -[#BBAAFF]---> BELIM  : eliminate break
+BELIM   -[#BBAAFF]--> RENEW   : renew path
+BELIM   -[#BBAAFF]--> BUILD   : rebuild path
+
+' Destroy
+BREAK   -[#FF6600]--> DESTROY : existence eliminated
+DESTROY -[#FF4444]--> [*]     : epoch end
+
+note right of WR
+  **STATELESS ENCODED STATE**
+  (.lt archive sealed — XOR-locked)
+  · Repair ELIMINATED
+  · Only RENEW permitted
+  · DeriveKey(UUID) version-stable
+end note
+
+note right of GR
+  **TRIDENT VERIFICATION**
+  ORDER  (Δ>0) → White Room · RWX 0x07
+  CONSENSUS (Δ=0) → Gray threshold
+  CHAOS  (Δ<0) → Green Room · RWX 0x04
+  All checks read-only · no mutation
+end note
+
+@enduml
+```
+
+---
+
 ## Quick Start
 
 ### Build

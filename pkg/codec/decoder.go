@@ -42,7 +42,7 @@ func Decode(cfg DecoderConfig) error {
 		fmt.Printf("[DECODER] sections:   %d\n", len(idx))
 	}
 
-	// ── Trident verification on the stored payload ────────────────────────
+	// ── Trident verification (read-only integrity check) ─────────────────
 	result := transform.RunTrident(payload)
 
 	if cfg.Verbose {
@@ -52,10 +52,9 @@ func Decode(cfg DecoderConfig) error {
 
 	// ── Reverse isomorphic XOR transform (self-inverse) ───────────────────
 	key := transform.DeriveKey(meta.UUID)
-	// The stored payload has been through: Encode → Trident receive-XOR.
-	// We must undo the receive channel flip before applying Decode.
-	undoReceive := undoReceiveChannel(result.Data)
-	recovered := transform.Decode(undoReceive, key)
+	// The stored payload is the pure XOR-encoded data (no receive flip).
+	// XOR is its own inverse, so Decode(Encode(raw, key), key) == raw.
+	recovered := transform.Decode(payload, key)
 
 	// ── Resolve output path ───────────────────────────────────────────────
 	if cfg.OutputPath == "" {
@@ -77,20 +76,6 @@ func Decode(cfg DecoderConfig) error {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-// undoReceiveChannel reverses the receive channel's LSB flip.
-// Channel 1 flips the LSB of odd-indexed bytes; this undoes that.
-func undoReceiveChannel(data []byte) []byte {
-	out := make([]byte, len(data))
-	for i, b := range data {
-		if i%2 != 0 {
-			out[i] = b ^ 0x01 // reverse the LSB flip
-		} else {
-			out[i] = b
-		}
-	}
-	return out
-}
 
 // resolveOutputPath builds a sensible output path for the decoded file.
 func resolveOutputPath(ltPath, originalName string) string {

@@ -1,24 +1,11 @@
-// Package transform implements the NSIGII isomorphic transformation and trident verification.
-//
-// Trident 3-channel verification architecture:
-//	Channel 0 — TRANSMITTER  127.0.0.1  (1/3)  WRITE
-//	Channel 1 — RECEIVER     127.0.0.2  (2/3)  READ
-//	Channel 2 — VERIFIER     127.0.0.3  (3/3)  EXECUTE
-//
-// The Verifier uses Discriminant Flash: Δ = b² - 4ac
-//	Δ > 0  → ORDER     (coherent signal)
-//	Δ = 0  → CONSENSUS (flash point)
-//	Δ < 0  → CHAOS     (repair needed)
-//
-// CRITICAL: All trident operations are READ-ONLY for verification.
-// No mutation of payload data occurs here.
+// Package transform implements NSIGII isomorphic transformation and trident verification.
 package transform
 
 import (
 	"math"
 )
 
-// TridentState represents the discriminant-derived state.
+// TridentState represents discriminant-derived state.
 type TridentState int
 
 const (
@@ -38,7 +25,7 @@ func (s TridentState) String() string {
 	}
 }
 
-// RWXFlags mirrors Unix-style permissions.
+// RWXFlags mirrors Unix permissions.
 const (
 	RWXRead    uint8 = 0x04
 	RWXWrite   uint8 = 0x02
@@ -56,16 +43,13 @@ type TridentResult struct {
 	Polarity     byte
 }
 
-// RunTrident executes TRANSMIT → RECEIVE → VERIFY pipeline.
-// All channels are READ-ONLY — data is never mutated.
+// RunTrident executes verification pipeline. READ-ONLY.
 func RunTrident(data []byte) TridentResult {
-	// Channel 0: TRANSMITTER — pass-through
+	// Channel 0 & 1: Pass-through (no mutation)
 	transmitted := transmit(data)
-
-	// Channel 1: RECEIVER — pass-through (NO mutation)
 	received := receive(transmitted)
 
-	// Channel 2: VERIFIER — discriminant check
+	// Channel 2: Discriminant verification
 	a, b, c := bipartiteConsensusParams(received)
 	delta := b*b - 4*a*c
 
@@ -74,18 +58,18 @@ func RunTrident(data []byte) TridentResult {
 	var wheelDeg int
 
 	switch {
-	case delta > 0:
+	case delta > 0.001: // ORDER with tolerance
 		state = StateOrder
 		rwx = RWXFull
 		wheelDeg = 120
-	case delta == 0:
-		state = StateConsensus
-		rwx = RWXFull
-		wheelDeg = 240
-	default:
+	case delta < -0.001: // CHAOS with tolerance
 		state = StateChaos
 		rwx = RWXRead
 		wheelDeg = 0
+	default: // CONSENSUS (near zero)
+		state = StateConsensus
+		rwx = RWXFull
+		wheelDeg = 240
 	}
 
 	return TridentResult{
@@ -98,21 +82,7 @@ func RunTrident(data []byte) TridentResult {
 	}
 }
 
-// DiscriminantState computes state classification only.
-func DiscriminantState(data []byte) TridentState {
-	a, b, c := bipartiteConsensusParams(data)
-	delta := b*b - 4*a*c
-	switch {
-	case delta > 0:
-		return StateOrder
-	case delta == 0:
-		return StateConsensus
-	default:
-		return StateChaos
-	}
-}
-
-// Internal helpers — ALL READ-ONLY
+// Internal helpers — READ-ONLY
 
 func transmit(data []byte) []byte {
 	out := make([]byte, len(data))
@@ -120,31 +90,32 @@ func transmit(data []byte) []byte {
 	return out
 }
 
-// receive is READ-ONLY — pure copy, no bit manipulation
 func receive(data []byte) []byte {
-    out := make([]byte, len(data))
-    copy(out, data)  // ← Pure copy, no mutation
-    return out
+	out := make([]byte, len(data))
+	copy(out, data)
+	return out
 }
 
-// bipartiteConsensusParams maps bit density to discriminant B parameter.
-// Returns A=1, B∈[0,4], C=1 where B = 4 * (setBits / totalBits)
+// bipartiteConsensusParams: A=1, B based on entropy, C=1
+// For normal data: B≈2 → Δ≈0 (CONSENSUS)
+// For ordered data (low entropy): B>2 → Δ>0 (ORDER)
+// For chaotic data (high entropy): B<2 → Δ<0 (CHAOS)
 func bipartiteConsensusParams(data []byte) (a, b, c float64) {
 	if len(data) == 0 {
-		return 1, 2, 1 // Neutral for empty
+		return 1.0, 2.0, 1.0
 	}
 	
-	var setBits int
-	for _, by := range data {
-		for v := by; v != 0; v >>= 1 {
-			setBits += int(v & 1)
+	// Count byte patterns (not bits)
+	var transitions int
+	for i := 1; i < len(data); i++ {
+		if data[i] != data[i-1] {
+			transitions++
 		}
 	}
 	
-	totalBits := len(data) * 8
-	density := float64(setBits) / float64(totalBits)
+	// High transition rate = chaotic, Low = ordered
+	ratio := float64(transitions) / float64(len(data)-1)
+	B := 4.0 * (1.0 - ratio) // Few transitions = ORDER (B≈4), Many = CHAOS (B≈0)
 	
-	// Linear mapping: 0% ones → B=0 (CHAOS), 50% → B=2 (CONSENSUS), 100% → B=4 (ORDER)
-	B := density * 4.0
 	return 1.0, B, 1.0
 }
